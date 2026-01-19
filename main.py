@@ -1,13 +1,18 @@
-from backend.scraper import scrape_svt_articles
+from backend.scraper import scrape_articles
 from backend.agent import analyze_news, generate_radio_script
 from backend.tts import speak_text
+from backend.constants import RSS_FEEDS
 
 if __name__ == "__main__":
-    print("Startar nyhetsprocessen...")
+    print("Startar...")
     
     # 1. Skrapa
-    raw_articles = scrape_svt_articles(max_articles=3)
-    print(f"\nHittade {len(raw_articles)} artiklar att analysera.\n")
+    raw_articles = []
+    
+    for feed in RSS_FEEDS:
+        print(f"\n--- Hämtar från {feed['source']} ---")
+        articles = scrape_articles(feed['url'], max_articles=2, paragraph_class=feed['paragraph_class'])
+        raw_articles.extend(articles)
     
     analyzed_articles = []
 

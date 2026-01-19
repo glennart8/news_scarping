@@ -4,8 +4,7 @@ import time
 
 
 # --- Scraper-funktion ---
-def scrape_svt_articles(max_articles=3):
-    rss_url = "https://www.svt.se/nyheter/rss.xml"
+def scrape_articles(rss_url, max_articles=3, paragraph_class=None):
     print(f"Hämtar RSS från {rss_url}...")
     
     try:
@@ -35,11 +34,12 @@ def scrape_svt_articles(max_articles=3):
             article_soup = BeautifulSoup(article_resp.content, "html.parser")
             
             # --- Hämta texten ---
-            # SVT har ofta texten i <p class="svt-text-body-paragraph">
-            # Hämtar alla <p> inuti <article> eller <section> för säkerhets skull
-            paragraphs = article_soup.find_all("p", class_="svt-text-body-paragraph")
+            paragraphs = []
+            # Om vi har en specifik klass att leta efter (t.ex. för SVT)
+            if paragraph_class:
+                paragraphs = article_soup.find_all("p", class_=paragraph_class)
             
-            # Fallback om klassnamnet ändrats
+            # Fallback: Hämta alla p-taggar om ingen specifik klass hittades eller angavs
             if not paragraphs:
                 paragraphs = article_soup.find_all("p")
 
