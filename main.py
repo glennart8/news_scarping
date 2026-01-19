@@ -1,51 +1,54 @@
 from pydantic import BaseModel, Field
 from typing import Literal, List
-from openai import OpenAI
+import google.generativeai as genai
+from dotenv import load_dotenv
 import os
 
-# Initiera klienten (kräver API-nyckel)
-client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+load_dotenv()
 
-# --- 1. Definiera din Pydantic-modell ---
-# Detta är "mallen" du tvingar LLM att följa
-class NyhetsAnalys(BaseModel):
-    titel: str = Field(..., description="En kort, kärnfull rubrik på svenska.")
-    sammanfattning: str = Field(..., description="Max 2 meningar sammanfattning.")
-    land: str = Field(..., description="Vilket land nyheten handlar om mest (t.ex. Sverige, USA).")
-    kategori: Literal["Inrikes", "Utrikes", "Ekonomi", "Sport", "Teknik", "Klimat"]
-    allvarlighetsgrad: int = Field(..., description="Betygsätt nyhetens allvar från 1 (kuriosa) till 10 (kris/krig).")
+genai.configure(api_key=os.environ.get("GEMINI_API_KEY"))
 
-class NyhetsLista(BaseModel):
-    artiklar: List[NyhetsAnalys]
+# --- Pydantic Model ---
+class NewsAnalysis(BaseModel):
+    title: str = Field(..., description="A short, punchy headline in Swedish.")
+    summary: str = Field(..., description="Max 2 sentences summary.")
+    country: str = Field(..., description="The country the news is mostly about (e.g. Sweden, USA).")
+    category: Literal["Domestic", "Foreign", "Economy", "Sports", "Technology", "Climate", "Crime"]
+    severity: int = Field(..., description="Rate the severity from 1 (curiosity) to 10 (crisis/war).")
 
-# --- 2. Funktionen som gör magin ---
-def analysera_nyhet(rå_text):
-    completion = client.beta.chat.completions.parse(
-        model="gpt-4o-2024-08-06",  # Modeller som stöder "Structured Outputs"
-        messages=[
-            {"role": "system", "content": "Du är en nyhetsredaktör. Analysera texten och extrahera data enligt schemat."},
-            {"role": "user", "content": f"Här är artikeln: {rå_text}"},
-        ],
-        response_format=NyhetsAnalys, # HÄR kopplar vi på Pydantic-modellen
+class NewsList(BaseModel):
+    articles: List[NewsAnalysis]
+
+# --- 2. The function doing the magic ---
+def analyze_news(raw_text):
+    model = genai.GenerativeModel("gemini-2.5-flash")
+    prompt = f"You are a news editor. Analyze the text and extract data according to the schema.\n\nHere is the article: {raw_text}"
+
+    response = model.generate_content(
+        prompt,
+        generation_config=genai.GenerationConfig(
+            response_mime_type="application/json",
+            response_schema=NewsAnalysis
+        )
     )
 
-    # Returnerar ett färdigt Python-objekt (inte en sträng!)
-    return completion.choices[0].message.parsed
+    # Returns a ready Python object
+    return NewsAnalysis.model_validate_json(response.text)
 
-# --- 3. Testkörning (Låtsas att vi skrapat detta från SVT) ---
-skrapad_text_från_svt = """
+# --- Test run (Pretend we scraped this from SVT) ---
+scraped_text_svt = """
 Regeringen meddelade idag att man skjuter till ytterligare 500 miljoner kronor till försvaret. 
 Statsministern underströk att säkerhetsläget i Europa kräver prioriteringar. 
 Oppositionen är dock kritisk och menar att pengarna tas från vården.
 """
 
-analys = analysera_nyhet(skrapad_text_från_svt)
+analysis = analyze_news(scraped_text_svt)
 
-# --- 4. Resultatet ---
-# Nu kan du använda datan programmeringstekniskt:
-print(f"Kategori: {analys.kategori}")  # Output: Inrikes
-print(f"Land: {analys.land}")          # Output: Sverige
-print(f"Allvar: {analys.allvarlighetsgrad}/10") 
+# --- The Result ---
+# Now you can use the data programmatically:
+print(f"Category: {analysis.category}")  
+print(f"Country: {analysis.country}")    
+print(f"Severity: {analysis.severity}/10") 
 
-# Om du vill spara det som JSON:
-print(analys.model_dump_json(indent=2))
+# If you want to save it as JSON:
+print(analysis.model_dump_json(indent=2))
